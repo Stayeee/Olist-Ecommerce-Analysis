@@ -17,4 +17,4 @@ This project analyzes e-commerce order performance, delivery efficiency and cust
 
 ## Dashboard Preview
 
-![Dashboard](dashboard.png)
+[View Dashboard PDF](Olist%20Practice.pdf)
