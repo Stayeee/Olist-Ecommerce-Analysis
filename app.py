@@ -129,10 +129,9 @@ st.markdown(
 def load_data():
 
     file_path = (
-        Path(__file__).resolve().parent
-        / "data"
-        / "analysis_table.csv"
-    )
+    Path(__file__).resolve().parent
+    / "analysis_table.csv"
+)
 
     if not file_path.exists():
         st.error(
