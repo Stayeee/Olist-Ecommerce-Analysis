@@ -52,6 +52,7 @@ The current tool registry contains:
 - `analyze_customer_behavior` — repeat customers and purchase frequency
 - `analyze_payment_behavior` — installment behavior and payment mix when available
 - `analyze_product_performance` — category analysis when the prepared dataset contains product category fields
+- `analyze_recent_change_drivers` — state/category contribution to the latest complete-month GMV change
 - `compare_states` — direct comparison between two Brazilian states
 
 ## Root-cause analysis
@@ -60,13 +61,16 @@ A diagnostic question should not stop at one KPI.
 
 For example, when a user asks **"Why did sales decline?"**, the agent can:
 
-1. inspect recent GMV trends;
-2. decompose the change into order volume and AOV;
-3. call regional or product tools when more evidence is useful;
-4. distinguish observed facts from possible business explanations;
-5. recommend the next operational investigation.
+1. identify the latest two complete calendar months;
+2. inspect GMV, order volume and AOV changes;
+3. decompose the GMV change into exact order-volume and AOV contributions;
+4. rank states or available product categories by contribution to the same period change;
+5. separate arithmetic drivers and segment concentration from unmeasured causal hypotheses;
+6. recommend the next operational investigation.
 
-The system prompt also tells the agent to treat Olist's latest month cautiously because a partial final month can look like a large decline even when it is only incomplete data.
+The dataset contains two incomplete tail months: September 2018 has 16 orders and October 2018 has 4. The previous implementation excluded only the last observed month, which still produced a false August-to-September collapse. The metric layer now detects month coverage from purchase dates and compares July 2018 with August 2018, the latest two complete months.
+
+For that period, gross payment value fell 4.1% while orders grew 3.5% and AOV fell 7.4%. The exact arithmetic decomposition shows a positive order-volume contribution of about R$35.9k and a negative AOV contribution of about R$80.0k. This identifies the measured driver without claiming an unsupported cause such as traffic, price or inventory.
 
 ## Why Tool Calling instead of RAG
 
@@ -86,7 +90,9 @@ Olist source tables contain one-to-many relationships between orders, items and 
 - orders containing multiple payment values;
 - conflicting late-delivery flags.
 
-This does not silently guess the correct metric grain. It makes the risk visible so the aggregation logic can be reviewed before treating the metrics as final.
+The checked-in table contains 99,441 rows and 99,441 unique orders, so `payment_value` is currently safe to sum once per order. The metric layer also collapses identical duplicate order rows if a future item join reintroduces them, and fails on conflicting order-level values instead of silently choosing an aggregation.
+
+The dashboard's GMV label means **gross payment value across all order statuses**. The dataset has no refund table, so this should not be described as net revenue. Delivery KPIs use only delivered orders with a recorded delivery duration; canceled and still-open orders are not counted as on-time deliveries.
 
 ## Evaluation
 
@@ -162,7 +168,7 @@ Then set your API key. You can use an environment variable or Streamlit secrets.
 Optional model setting:
 
 ```text
-OPENAI_MODEL=gpt-5.6-luna
+OPENAI_MODEL=gpt-5-mini
 ```
 
 Then run:
@@ -183,7 +189,7 @@ You can also paste an API key into the Streamlit sidebar for a local demonstrati
 - Function / Tool Calling
 - GitHub Actions
 
-The default demo model is `gpt-5.6-luna`, a cost-sensitive GPT-5.6 model that supports function tools through the Responses API.
+The default demo model is `gpt-5-mini`, a cost-sensitive API model that supports the Responses API and function calling. You can override it with `OPENAI_MODEL` when your API account has access to another compatible model.
 
 ## Product thinking behind the prototype
 
@@ -209,7 +215,9 @@ See `PROJECT_DESIGN.md` for the full product rationale and interview guide.
 ## Current limitations
 
 - The agent depends on the prepared `analysis_table.csv` rather than querying a production database.
-- The exact GMV aggregation should be treated as provisional until the prepared table's order/payment grain check is reviewed.
+- GMV is gross payment value rather than net revenue because refunds are unavailable.
+- Recent-change analysis identifies arithmetic and segment contributors; traffic, conversion, pricing, inventory and campaign data would be required for causal diagnosis.
 - Product analysis is only available when a product-category field exists in the prepared table.
 - Agent evaluation currently focuses on tool-selection behavior and should be extended with answer-quality and cost metrics.
 - This is a portfolio prototype, not a production ecommerce analytics system.
+

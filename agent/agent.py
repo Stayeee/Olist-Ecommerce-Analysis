@@ -41,7 +41,7 @@ class OlistBusinessAgent:
             raise ValueError("OPENAI_API_KEY is required to run the AI agent.")
 
         self.df = df
-        self.model = model or os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
+        self.model = model or os.getenv("OPENAI_MODEL", "gpt-5-mini")
         self.client = OpenAI(api_key=resolved_key)
         self.registry = build_tool_registry(df)
         self.max_tool_rounds = max_tool_rounds
@@ -147,3 +147,4 @@ class OlistBusinessAgent:
             steps=steps,
             error="max_tool_rounds_reached",
         )
+

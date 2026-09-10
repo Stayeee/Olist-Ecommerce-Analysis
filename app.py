@@ -7,6 +7,7 @@ import streamlit as st
 from agent.agent import OlistBusinessAgent
 from data.loader import load_analysis_data
 from tools.analytics import analyze_region_performance, analyze_sales_trend, get_sales_overview
+from tools.drivers import analyze_recent_change_drivers
 
 
 st.set_page_config(
@@ -55,7 +56,7 @@ st.markdown(
 
 with st.sidebar:
     st.markdown("### Agent settings")
-    model = st.text_input("Model", value=os.getenv("OPENAI_MODEL", "gpt-5.6-luna"))
+    model = st.text_input("Model", value=os.getenv("OPENAI_MODEL", "gpt-5-mini"))
 
     secret_key = ""
     try:
@@ -98,7 +99,7 @@ with overview_tab:
 
     left, right = st.columns([1.5, 1])
     with left:
-        fig = px.line(trend_df, x="month", y="gmv", markers=True, title="Recent GMV trend")
+        fig = px.line(trend_df, x="month", y="gmv", markers=True, title="GMV trend · complete months only")
         st.plotly_chart(fig, use_container_width=True)
     with right:
         region = pd.DataFrame(
@@ -174,30 +175,83 @@ with agent_tab:
                 st.markdown(f"**{message['role'].title()}:** {message['content']}")
 
 with diagnostics_tab:
-    st.subheader("Root-cause analysis pattern")
+    st.subheader("Recent GMV root-cause analysis")
     st.markdown(
         """
         <div class="note">
-        A diagnostic question should not stop at one KPI. The agent can first inspect the sales trend,
-        then decompose GMV into orders and AOV, and use regional or product tools to locate major contributors.
+        This view compares the latest two complete calendar months. It decomposes GMV into order-volume
+        and AOV effects, then ranks states by their measured contribution to the change.
         </div>
         """,
         unsafe_allow_html=True,
     )
 
     trend = analyze_sales_trend(df, months=6)
+    state_drivers = analyze_recent_change_drivers(df, dimension="state", limit=8)
+    previous_label = pd.Timestamp(trend["previous_month"]).strftime("%b %Y")
+    latest_label = pd.Timestamp(trend["latest_month"]).strftime("%b %Y")
     a, b, c = st.columns(3)
-    a.metric("Latest GMV MoM", f"{trend['gmv_mom_pct']:.1f}%")
+    a.metric(f"GMV · {latest_label} vs {previous_label}", f"{trend['gmv_mom_pct']:.1f}%")
     b.metric("Orders MoM", f"{trend['orders_mom_pct']:.1f}%")
     c.metric("AOV MoM", f"{trend['aov_mom_pct']:.1f}%")
 
-    st.markdown("**Example investigation:**")
-    st.code(
-        "Question -> Sales Trend Tool -> Observation -> Region/Product Tool -> Observation -> Final Insight",
-        language="text",
+    st.markdown("### Finding")
+    if trend["gmv_change"] < 0 and trend["primary_arithmetic_driver"] == "aov":
+        st.write(
+            f"GMV fell **{abs(trend['gmv_mom_pct']):.1f}%**, even as order volume grew "
+            f"**{trend['orders_mom_pct']:.1f}%**. The arithmetic decline was driven by lower AOV."
+        )
+    else:
+        st.write(
+            f"GMV changed **{trend['gmv_mom_pct']:.1f}%**; the larger arithmetic contribution came from "
+            f"**{trend['primary_arithmetic_driver']}**."
+        )
+
+    st.markdown("### Evidence")
+    contribution_df = pd.DataFrame(
+        [
+            {"driver": "Order volume", "gmv_contribution": trend["order_volume_contribution"]},
+            {"driver": "AOV", "gmv_contribution": trend["aov_contribution"]},
+        ]
+    )
+    driver_df = pd.DataFrame(state_drivers["drivers"])
+    left, right = st.columns(2)
+    with left:
+        fig = px.bar(
+            contribution_df,
+            x="driver",
+            y="gmv_contribution",
+            color="gmv_contribution",
+            color_continuous_scale=["#b42318", "#f2f4f7", "#027a48"],
+            title="Orders vs AOV contribution to GMV change",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    with right:
+        fig = px.bar(
+            driver_df.sort_values("gmv_change"),
+            x="gmv_change",
+            y="state",
+            orientation="h",
+            color="gmv_change",
+            color_continuous_scale=["#b42318", "#f2f4f7", "#027a48"],
+            title="State contribution to GMV change",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("### Interpretation")
+    st.write(
+        "Order count and AOV are mathematical drivers. State contributions show where the change was "
+        "concentrated; they do not prove a causal explanation such as traffic, pricing, stock or competition."
+    )
+
+    st.markdown("### Recommended action")
+    negative_states = driver_df.nsmallest(3, "gmv_change")["state"].tolist()
+    st.write(
+        "Prioritize the largest negative-contribution states "
+        f"({', '.join(negative_states)}) and inspect traffic, conversion, product mix and availability before changing spend."
     )
     st.caption(
-        "The system prompt explicitly warns that Olist's final month may be partial, so the agent should not automatically label a last-month decline as a real business deterioration."
+        "Excluded partial months: " + ", ".join(trend["excluded_partial_months"])
     )
 
 with method_tab:
@@ -229,3 +283,4 @@ LLM decides: enough evidence?
     st.write(
         "The repository includes an offline smoke test for deterministic tools plus 25 representative Agent questions covering overview, sales, root cause, region, delivery, customer, payment, product, comparisons, out-of-scope requests and guardrails."
     )
+

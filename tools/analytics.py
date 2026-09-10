@@ -4,15 +4,19 @@ from typing import Any
 
 import pandas as pd
 
+from data.metrics import complete_month_starts, delivered_order_facts, order_facts
+
 
 def _safe_divide(numerator: float, denominator: float) -> float:
     return float(numerator / denominator) if denominator else 0.0
 
 
 def get_sales_overview(df: pd.DataFrame) -> dict[str, Any]:
-    total_orders = int(df["order_id"].nunique())
-    gmv = float(df["payment_value"].sum())
-    unique_customers = int(df["customer_unique_id"].nunique())
+    facts = order_facts(df)
+    delivery = delivered_order_facts(facts)
+    total_orders = int(facts["order_id"].nunique())
+    gmv = float(facts["payment_value"].sum())
+    unique_customers = int(facts["customer_unique_id"].nunique())
 
     return {
         "gmv": gmv,
@@ -20,14 +24,27 @@ def get_sales_overview(df: pd.DataFrame) -> dict[str, Any]:
         "aov": _safe_divide(gmv, total_orders),
         "unique_customers": unique_customers,
         "orders_per_customer": _safe_divide(total_orders, unique_customers),
-        "late_rate": float(df["is_late"].mean() * 100),
-        "avg_delivery_days": float(df["delivery_days"].mean()),
+        "late_rate": float(delivery["is_late"].mean() * 100),
+        "avg_delivery_days": float(delivery["delivery_days"].mean()),
+        "delivery_kpi_orders": int(len(delivery)),
+        "gmv_definition": (
+            "Gross payment value at one row per order across all order statuses; "
+            "the dataset has no refund table for net revenue."
+        ),
     }
 
 
 def analyze_sales_trend(df: pd.DataFrame, months: int = 6) -> dict[str, Any]:
+    facts = order_facts(df)
+    complete_months = complete_month_starts(facts)
+    observed_months = sorted(facts["order_month"].dropna().unique())
+    excluded_months = [
+        pd.Timestamp(month).strftime("%Y-%m")
+        for month in observed_months
+        if pd.Timestamp(month) not in complete_months
+    ]
     monthly = (
-        df.dropna(subset=["order_month"])
+        facts[facts["order_month"].isin(complete_months)]
         .groupby("order_month", as_index=False)
         .agg(
             gmv=("payment_value", "sum"),
@@ -45,6 +62,17 @@ def analyze_sales_trend(df: pd.DataFrame, months: int = 6) -> dict[str, Any]:
     def pct_change(current: float, prior: float) -> float:
         return _safe_divide(current - prior, prior) * 100
 
+    order_contribution = (
+        (float(latest["orders"]) - float(previous["orders"]))
+        * (float(previous["aov"]) + float(latest["aov"]))
+        / 2
+    )
+    aov_contribution = (
+        (float(latest["aov"]) - float(previous["aov"]))
+        * (float(previous["orders"]) + float(latest["orders"]))
+        / 2
+    )
+
     return {
         "latest_month": str(latest["order_month"].date()),
         "latest_gmv": float(latest["gmv"]),
@@ -53,6 +81,18 @@ def analyze_sales_trend(df: pd.DataFrame, months: int = 6) -> dict[str, Any]:
         "gmv_mom_pct": pct_change(float(latest["gmv"]), float(previous["gmv"])),
         "orders_mom_pct": pct_change(float(latest["orders"]), float(previous["orders"])),
         "aov_mom_pct": pct_change(float(latest["aov"]), float(previous["aov"])),
+        "gmv_change": float(latest["gmv"] - previous["gmv"]),
+        "order_volume_contribution": float(order_contribution),
+        "aov_contribution": float(aov_contribution),
+        "primary_arithmetic_driver": (
+            "orders" if abs(order_contribution) >= abs(aov_contribution) else "aov"
+        ),
+        "previous_month": str(previous["order_month"].date()),
+        "previous_gmv": float(previous["gmv"]),
+        "previous_orders": int(previous["orders"]),
+        "previous_aov": float(previous["aov"]),
+        "excluded_partial_months": excluded_months,
+        "period_scope": "Only calendar months with sufficient purchase-day coverage are used.",
         "series": [
             {
                 "month": str(row.order_month.date()),
@@ -71,17 +111,23 @@ def analyze_region_performance(
     limit: int = 10,
     min_orders: int = 100,
 ) -> dict[str, Any]:
+    facts = order_facts(df)
+    delivery = delivered_order_facts(facts)
     region = (
-        df.groupby("customer_state", as_index=False)
+        facts.groupby("customer_state", as_index=False)
         .agg(
             gmv=("payment_value", "sum"),
             orders=("order_id", "nunique"),
             customers=("customer_unique_id", "nunique"),
-            late_rate=("is_late", "mean"),
-            avg_delivery_days=("delivery_days", "mean"),
         )
     )
-    region["late_rate"] *= 100
+    delivery_region = delivery.groupby("customer_state", as_index=False).agg(
+        late_rate=("is_late", "mean"),
+        avg_delivery_days=("delivery_days", "mean"),
+        delivery_orders=("order_id", "nunique"),
+    )
+    delivery_region["late_rate"] *= 100
+    region = region.merge(delivery_region, on="customer_state", how="left")
     region["aov"] = region["gmv"] / region["orders"].replace(0, pd.NA)
     region = region[region["orders"] >= min_orders].copy()
 
@@ -102,6 +148,7 @@ def analyze_region_performance(
                 "aov": float(row.aov),
                 "late_rate": float(row.late_rate),
                 "avg_delivery_days": float(row.avg_delivery_days),
+                "delivery_orders": int(row.delivery_orders),
             }
             for row in ranked.itertuples()
         ],
@@ -111,17 +158,21 @@ def analyze_region_performance(
 def analyze_delivery_performance(
     df: pd.DataFrame, limit: int = 5, min_orders: int = 100
 ) -> dict[str, Any]:
+    delivery = delivered_order_facts(df)
     regional = analyze_region_performance(
         df, metric="late_rate", limit=limit, min_orders=min_orders
     )
     return {
-        "overall_late_rate": float(df["is_late"].mean() * 100),
-        "avg_delivery_days": float(df["delivery_days"].mean()),
+        "overall_late_rate": float(delivery["is_late"].mean() * 100),
+        "avg_delivery_days": float(delivery["delivery_days"].mean()),
+        "delivery_kpi_orders": int(len(delivery)),
+        "denominator_definition": "Delivered orders with a recorded delivery duration.",
         "highest_risk_states": regional["rows"],
     }
 
 
 def analyze_customer_behavior(df: pd.DataFrame) -> dict[str, Any]:
+    df = order_facts(df)
     customer_orders = (
         df.groupby("customer_unique_id")["order_id"].nunique().rename("orders")
     )
@@ -138,6 +189,7 @@ def analyze_customer_behavior(df: pd.DataFrame) -> dict[str, Any]:
 
 
 def analyze_payment_behavior(df: pd.DataFrame) -> dict[str, Any]:
+    df = order_facts(df)
     installments = df.get("payment_installments", pd.Series(index=df.index, dtype=float)).fillna(0)
     result: dict[str, Any] = {
         "avg_installments": float(installments.mean()),
@@ -210,6 +262,7 @@ def analyze_product_performance(
 
 
 def compare_states(df: pd.DataFrame, state_a: str, state_b: str) -> dict[str, Any]:
+    df = order_facts(df)
     targets = [state_a.upper(), state_b.upper()]
     subset = df[df["customer_state"].isin(targets)]
     rows = analyze_region_performance(subset, metric="gmv", limit=2, min_orders=1)["rows"]
@@ -219,3 +272,4 @@ def compare_states(df: pd.DataFrame, state_a: str, state_b: str) -> dict[str, An
         "state_a": by_state.get(targets[0]),
         "state_b": by_state.get(targets[1]),
     }
+

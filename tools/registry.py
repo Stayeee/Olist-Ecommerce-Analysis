@@ -44,7 +44,7 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "name": "analyze_sales_trend",
-        "description": "Analyze monthly GMV, orders and AOV trends. Use this for growth, decline, trend and recent-period diagnostic questions.",
+        "description": "Analyze complete calendar months of GMV, orders and AOV; report MoM change and exact order-volume versus AOV contributions. Use for trend and recent-period diagnosis.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -56,7 +56,7 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "name": "analyze_recent_change_drivers",
-        "description": "Decompose recent GMV change across the two latest complete months by state or product category. Use this for root-cause questions asking what segments drove a recent sales increase or decline. The newest observed month is excluded because it may be partial.",
+        "description": "Decompose GMV change across the two latest complete calendar months by state or available product category. All months with insufficient date coverage are excluded and reported.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -136,3 +136,4 @@ TOOL_SCHEMAS = [
         },
     },
 ]
+

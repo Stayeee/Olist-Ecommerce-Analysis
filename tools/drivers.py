@@ -4,6 +4,8 @@ from typing import Any
 
 import pandas as pd
 
+from data.metrics import complete_month_starts, order_facts
+
 
 def _category_column(df: pd.DataFrame) -> str | None:
     for candidate in (
@@ -30,16 +32,22 @@ def analyze_recent_change_drivers(
     if "order_month" not in df.columns:
         return {"available": False, "reason": "order_month is unavailable."}
 
-    months = sorted(df["order_month"].dropna().unique())
-    if len(months) < 3:
+    facts = order_facts(df)
+    observed_months = sorted(facts["order_month"].dropna().unique())
+    months = complete_month_starts(facts)
+    if len(months) < 2:
         return {
             "available": False,
-            "reason": "At least three observed months are required to exclude the possibly partial final month.",
+            "reason": "At least two complete calendar months are required.",
         }
 
-    latest_observed = pd.Timestamp(months[-1])
-    current_month = pd.Timestamp(months[-2])
-    previous_month = pd.Timestamp(months[-3])
+    current_month = pd.Timestamp(months[-1])
+    previous_month = pd.Timestamp(months[-2])
+    excluded_months = [
+        pd.Timestamp(month).strftime("%Y-%m")
+        for month in observed_months
+        if pd.Timestamp(month) not in months
+    ]
 
     if dimension == "state":
         dimension_col = "customer_state"
@@ -59,7 +67,7 @@ def analyze_recent_change_drivers(
             "reason": "dimension must be either 'state' or 'category'.",
         }
 
-    subset = df[df["order_month"].isin([previous_month, current_month])].copy()
+    subset = facts[facts["order_month"].isin([previous_month, current_month])].copy()
     subset = subset.dropna(subset=[dimension_col])
 
     grouped = (
@@ -112,7 +120,7 @@ def analyze_recent_change_drivers(
     return {
         "available": True,
         "dimension": dimension,
-        "excluded_latest_observed_month": str(latest_observed.date()),
+        "excluded_partial_months": excluded_months,
         "previous_complete_month": str(previous_month.date()),
         "current_complete_month": str(current_month.date()),
         "previous_total_gmv": previous_total,
@@ -122,7 +130,6 @@ def analyze_recent_change_drivers(
             total_change / previous_total * 100 if previous_total else None
         ),
         "drivers": ranked,
-        "caution": (
-            "GMV uses payment_value at the prepared table's current grain; review data/quality.py output before treating the absolute amount as final."
-        ),
+        "gmv_definition": "Gross payment value at one row per order across all order statuses.",
     }
+

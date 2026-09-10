@@ -4,6 +4,8 @@ from typing import Any
 
 import pandas as pd
 
+from data.metrics import delivered_order_facts, month_coverage
+
 
 def inspect_data_quality(df: pd.DataFrame) -> dict[str, Any]:
     """Return lightweight checks that help detect unsafe metric aggregation.
@@ -37,4 +39,14 @@ def inspect_data_quality(df: pd.DataFrame) -> dict[str, Any]:
         late_nunique = df.groupby("order_id")["is_late"].nunique(dropna=False)
         result["orders_with_conflicting_late_flags"] = int((late_nunique > 1).sum())
 
+    coverage = month_coverage(df)
+    result["complete_months"] = [row["month"] for row in coverage if row["is_complete"]]
+    result["partial_months"] = [row["month"] for row in coverage if not row["is_complete"]]
+    result["delivery_kpi_orders"] = int(len(delivered_order_facts(df)))
+    result["gmv_definition"] = (
+        "Sum of order-level payment_value across all orders in the prepared table; "
+        "cancellations and refunds cannot be netted without refund data."
+    )
+
     return result
+

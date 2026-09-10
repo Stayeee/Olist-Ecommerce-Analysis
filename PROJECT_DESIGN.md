@@ -94,19 +94,31 @@ Separate measured facts from hypotheses
 Recommend the next operational investigation
 ```
 
-Important guardrail: Olist's final month can be incomplete, so a large last-month decline should not automatically be interpreted as real business deterioration.
+Important guardrail: more than one tail month can be incomplete. The metric layer checks first/last purchase date and active-day coverage for every month. In this dataset it excludes both September and October 2018, then compares July with August 2018.
+
+The latest valid comparison is:
+
+- GMV: -4.1%
+- Orders: +3.5%
+- AOV: -7.4%
+- Order-volume contribution: approximately +R$35.9k
+- AOV contribution: approximately -R$80.0k
+
+This supports the finding that lower AOV was the arithmetic driver. State-level contributions locate where the change concentrated, but do not prove why AOV or demand changed.
 
 ## 8. Data-quality design
 
 Olist source tables contain one-to-many relationships among orders, items and payments. A prepared analysis table can therefore contain multiple rows per order after joins.
 
-Before treating row-level `payment_value` sums as final GMV, the project checks:
+Before treating row-level `payment_value` sums as GMV, the project checks:
 
 - number of rows vs unique orders;
 - rows per order;
 - maximum rows per order;
 - whether one order contains multiple payment values;
 - whether delivery flags conflict within an order.
+
+The checked-in table passes the grain check: 99,441 rows and 99,441 unique orders. GMV is explicitly defined as gross order-level payment value across all statuses because refund data is not available. Delivery metrics use delivered orders with a recorded duration, so open or canceled orders do not dilute the late rate.
 
 This check is intentionally visible because an intelligent Agent cannot compensate for incorrect metric definitions.
 
@@ -117,7 +129,7 @@ This check is intentionally visible because an intelligent Agent cannot compensa
 Run:
 
 ```bash
-python evaluation/smoke_test.py
+python -m evaluation.smoke_test
 ```
 
 Purpose: verify the prepared dataset loads and every analytics function executes without an LLM or API cost.
@@ -171,3 +183,4 @@ The first version used keyword matching and fixed templates, so it was closer to
 ## 12. Current boundary
 
 This is a portfolio prototype, not a production analytics platform. It intentionally does not yet include a production database, role-based access control, enterprise observability, RAG, fine-tuning or multi-agent orchestration.
+
