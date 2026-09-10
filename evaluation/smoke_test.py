@@ -15,6 +15,7 @@ from tools.analytics import (
     compare_states,
     get_sales_overview,
 )
+from tools.drivers import analyze_recent_change_drivers
 
 
 def main() -> None:
@@ -36,6 +37,8 @@ def main() -> None:
     checks = {
         "sales_overview": lambda: get_sales_overview(df),
         "sales_trend": lambda: analyze_sales_trend(df, months=6),
+        "recent_change_state_drivers": lambda: analyze_recent_change_drivers(df, dimension="state", limit=5),
+        "recent_change_category_drivers": lambda: analyze_recent_change_drivers(df, dimension="category", limit=5),
         "region": lambda: analyze_region_performance(df, metric="gmv", limit=5),
         "delivery": lambda: analyze_delivery_performance(df, limit=5),
         "customer": lambda: analyze_customer_behavior(df),
@@ -53,7 +56,7 @@ def main() -> None:
             if not isinstance(result, dict):
                 raise TypeError(f"Expected dict, got {type(result).__name__}")
             print(f"[PASS] {name}")
-            if name == "product" and result.get("available") is False:
+            if name in {"product", "recent_change_category_drivers"} and result.get("available") is False:
                 print("       Product category is not present; tool correctly reports it as unavailable.")
         except Exception as exc:
             failures.append(name)
