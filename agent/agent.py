@@ -23,10 +23,11 @@ class AgentStep:
 class AgentResult:
     answer: str
     steps: list[AgentStep] = field(default_factory=list)
+    error: str | None = None
 
 
 class OlistBusinessAgent:
-    """Minimal multi-step business analysis agent using OpenAI tool calling."""
+    """Multi-step business analysis agent using OpenAI Responses API tool calling."""
 
     def __init__(
         self,
@@ -35,13 +36,21 @@ class OlistBusinessAgent:
         api_key: str | None = None,
         max_tool_rounds: int = 6,
     ) -> None:
+        resolved_key = api_key or os.getenv("OPENAI_API_KEY")
+        if not resolved_key:
+            raise ValueError("OPENAI_API_KEY is required to run the AI agent.")
+
         self.df = df
         self.model = model or os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
-        self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
+        self.client = OpenAI(api_key=resolved_key)
         self.registry = build_tool_registry(df)
         self.max_tool_rounds = max_tool_rounds
 
-    def ask(self, question: str, history: list[dict[str, str]] | None = None) -> AgentResult:
+    def ask(
+        self,
+        question: str,
+        history: list[dict[str, str]] | None = None,
+    ) -> AgentResult:
         if not question.strip():
             return AgentResult(answer="Please enter a business question.")
 
@@ -51,17 +60,28 @@ class OlistBusinessAgent:
             content = message.get("content")
             if role in {"user", "assistant"} and content:
                 input_items.append({"role": role, "content": content})
-        input_items.append({"role": "user", "content": question})
+        input_items.append({"role": "user", "content": question.strip()})
 
         steps: list[AgentStep] = []
 
         for _ in range(self.max_tool_rounds):
-            response = self.client.responses.create(
-                model=self.model,
-                instructions=SYSTEM_PROMPT,
-                input=input_items,
-                tools=TOOL_SCHEMAS,
-            )
+            try:
+                response = self.client.responses.create(
+                    model=self.model,
+                    instructions=SYSTEM_PROMPT,
+                    input=input_items,
+                    tools=TOOL_SCHEMAS,
+                )
+            except Exception as exc:
+                message = f"{type(exc).__name__}: {exc}"
+                return AgentResult(
+                    answer=(
+                        "The AI model request failed, so no business conclusion was generated. "
+                        "Check the API key, model name, network connection and account access."
+                    ),
+                    steps=steps,
+                    error=message,
+                )
 
             function_calls = [
                 item for item in response.output if item.type == "function_call"
@@ -97,11 +117,17 @@ class OlistBusinessAgent:
                     except Exception as exc:
                         result = {"error": f"{type(exc).__name__}: {exc}"}
 
+                serialized_result = json.dumps(
+                    result,
+                    ensure_ascii=False,
+                    default=str,
+                )
+
                 steps.append(
                     AgentStep(
                         step_type="observation",
                         name=tool_name,
-                        detail=json.dumps(result, ensure_ascii=False, default=str)[:2500],
+                        detail=serialized_result[:2500],
                     )
                 )
 
@@ -109,7 +135,7 @@ class OlistBusinessAgent:
                     {
                         "type": "function_call_output",
                         "call_id": call.call_id,
-                        "output": json.dumps(result, ensure_ascii=False, default=str),
+                        "output": serialized_result,
                     }
                 )
 
@@ -119,4 +145,5 @@ class OlistBusinessAgent:
                 "Try a narrower business question."
             ),
             steps=steps,
+            error="max_tool_rounds_reached",
         )
