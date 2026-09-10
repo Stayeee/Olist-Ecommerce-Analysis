@@ -39,6 +39,9 @@ def get_data() -> pd.DataFrame:
 df = get_data()
 overview = get_sales_overview(df)
 
+if "agent_history" not in st.session_state:
+    st.session_state.agent_history = []
+
 st.markdown(
     """
     <div class="hero">
@@ -64,6 +67,10 @@ with st.sidebar:
     if not api_key:
         api_key = st.text_input("OpenAI API key", type="password")
 
+    if st.button("Clear conversation", use_container_width=True):
+        st.session_state.agent_history = []
+        st.rerun()
+
     st.divider()
     st.markdown("**What makes this an Agent?**")
     st.caption(
@@ -71,7 +78,6 @@ with st.sidebar:
     )
     st.markdown("**Guardrail**")
     st.caption("Business numbers must come from tool outputs rather than model memory.")
-
 
 overview_tab, agent_tab, diagnostics_tab, method_tab = st.tabs(
     ["Business overview", "AI analyst", "Root-cause lab", "How it works"]
@@ -98,7 +104,13 @@ with overview_tab:
         region = pd.DataFrame(
             analyze_region_performance(df, metric="gmv", limit=8, min_orders=100)["rows"]
         )
-        fig = px.bar(region.sort_values("gmv"), x="gmv", y="state", orientation="h", title="Top states by GMV")
+        fig = px.bar(
+            region.sort_values("gmv"),
+            x="gmv",
+            y="state",
+            orientation="h",
+            title="Top states by GMV",
+        )
         st.plotly_chart(fig, use_container_width=True)
 
 with agent_tab:
@@ -115,39 +127,46 @@ with agent_tab:
     default_question = "" if selected == "Write my own question" else selected
     question = st.text_area("Business question", value=default_question, height=90)
 
-    if "agent_history" not in st.session_state:
-        st.session_state.agent_history = []
-
     if st.button("Analyze", type="primary", use_container_width=True):
         if not api_key:
             st.error("Add an OpenAI API key in the sidebar or Streamlit secrets before running the agent.")
         elif not question.strip():
             st.warning("Enter a business question first.")
         else:
-            with st.spinner("The agent is selecting and running analytics tools..."):
-                agent = OlistBusinessAgent(df=df, model=model, api_key=api_key)
-                result = agent.ask(question, history=st.session_state.agent_history)
-
-            st.session_state.agent_history.extend(
-                [
-                    {"role": "user", "content": question},
-                    {"role": "assistant", "content": result.answer},
-                ]
-            )
-            st.markdown("### Decision-ready answer")
-            st.markdown(result.answer)
-
-            st.markdown("### Agent execution trace")
-            if not result.steps:
-                st.info("No data tool was needed for this question.")
+            try:
+                with st.spinner("The agent is selecting and running analytics tools..."):
+                    agent = OlistBusinessAgent(df=df, model=model, api_key=api_key)
+                    result = agent.ask(question, history=st.session_state.agent_history)
+            except Exception as exc:
+                st.error("The agent could not start. Check the API key, model name and local environment.")
+                st.code(f"{type(exc).__name__}: {exc}")
             else:
-                for idx, step in enumerate(result.steps, start=1):
-                    if step.step_type == "tool_call":
-                        st.markdown(f"**{idx}. Tool call · `{step.name}`**")
-                        st.code(step.detail, language="json")
-                    else:
-                        with st.expander(f"{idx}. Observation · {step.name}"):
+                st.session_state.agent_history.extend(
+                    [
+                        {"role": "user", "content": question},
+                        {"role": "assistant", "content": result.answer},
+                    ]
+                )
+
+                if result.error:
+                    st.warning("The agent returned an execution error instead of a completed analysis.")
+                    with st.expander("Technical error"):
+                        st.code(result.error)
+
+                st.markdown("### Decision-ready answer")
+                st.markdown(result.answer)
+
+                st.markdown("### Agent execution trace")
+                if not result.steps:
+                    st.info("No data tool was needed for this question.")
+                else:
+                    for idx, step in enumerate(result.steps, start=1):
+                        if step.step_type == "tool_call":
+                            st.markdown(f"**{idx}. Tool call · `{step.name}`**")
                             st.code(step.detail, language="json")
+                        else:
+                            with st.expander(f"{idx}. Observation · {step.name}"):
+                                st.code(step.detail, language="json")
 
     if st.session_state.agent_history:
         with st.expander("Conversation context"):
@@ -208,5 +227,5 @@ LLM decides: enough evidence?
 
     st.markdown("### Evaluation")
     st.write(
-        "The repository includes 25 representative questions covering overview, sales, root cause, region, delivery, customer, payment, product, comparisons, out-of-scope requests and guardrails."
+        "The repository includes an offline smoke test for deterministic tools plus 25 representative Agent questions covering overview, sales, root cause, region, delivery, customer, payment, product, comparisons, out-of-scope requests and guardrails."
     )
