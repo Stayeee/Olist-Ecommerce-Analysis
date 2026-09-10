@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from data.loader import load_analysis_data
+from data.quality import inspect_data_quality
 from tools.analytics import (
     analyze_customer_behavior,
     analyze_delivery_performance,
@@ -18,6 +20,18 @@ from tools.analytics import (
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
     df = load_analysis_data(root / "analysis_table.csv")
+
+    quality = inspect_data_quality(df)
+    print("Dataset grain check:")
+    print(json.dumps(quality, indent=2, ensure_ascii=False))
+    print()
+
+    if quality.get("payment_value_requires_grain_review"):
+        print(
+            "[WARN] The prepared table is not clearly one row per order. "
+            "Review how payment_value was joined before treating row-level sums as final GMV."
+        )
+        print()
 
     checks = {
         "sales_overview": lambda: get_sales_overview(df),
