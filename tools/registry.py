@@ -14,6 +14,7 @@ from tools.analytics import (
     compare_states,
     get_sales_overview,
 )
+from tools.drivers import analyze_recent_change_drivers
 
 
 ToolFn = Callable[..., dict[str, Any]]
@@ -28,6 +29,7 @@ def build_tool_registry(df: pd.DataFrame) -> dict[str, ToolFn]:
         "analyze_customer_behavior": lambda **kwargs: analyze_customer_behavior(df),
         "analyze_payment_behavior": lambda **kwargs: analyze_payment_behavior(df),
         "analyze_product_performance": lambda **kwargs: analyze_product_performance(df, **kwargs),
+        "analyze_recent_change_drivers": lambda **kwargs: analyze_recent_change_drivers(df, **kwargs),
         "compare_states": lambda **kwargs: compare_states(df, **kwargs),
     }
 
@@ -53,8 +55,21 @@ TOOL_SCHEMAS = [
     },
     {
         "type": "function",
+        "name": "analyze_recent_change_drivers",
+        "description": "Decompose recent GMV change across the two latest complete months by state or product category. Use this for root-cause questions asking what segments drove a recent sales increase or decline. The newest observed month is excluded because it may be partial.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "dimension": {"type": "string", "enum": ["state", "category"]},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 20}
+            },
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
         "name": "analyze_region_performance",
-        "description": "Rank Brazilian states by GMV, orders, AOV, late rate or delivery time.",
+        "description": "Rank Brazilian states by GMV, orders, AOV, late rate or delivery time across the dataset. Use for structural regional comparisons, not as the primary explanation for a recent month-over-month change.",
         "parameters": {
             "type": "object",
             "properties": {
