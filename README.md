@@ -126,7 +126,7 @@ Run with an API key:
 python -m evaluation.evaluate
 ```
 
-The first evaluation metric checks whether the Agent used the expected analytics tools. Future iterations can add grounded-answer scoring, multi-step completion rate, latency and token/API cost.
+The evaluation records required-tool coverage, multi-step completion, Finding/Evidence/Interpretation/Action structure, execution errors, latency, and input/output token usage. Detailed results are written to `evaluation/results.json` for review.
 
 ## Project structure
 

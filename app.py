@@ -156,6 +156,11 @@ with agent_tab:
 
                 st.markdown("### Decision-ready answer")
                 st.markdown(result.answer)
+                st.caption(
+                    f"Model: {result.model} · Tool rounds: {result.tool_rounds} · "
+                    f"Tokens: {result.input_tokens:,} in / {result.output_tokens:,} out · "
+                    f"Latency: {result.latency_ms / 1000:.1f}s"
+                )
 
                 st.markdown("### Agent execution trace")
                 if not result.steps:

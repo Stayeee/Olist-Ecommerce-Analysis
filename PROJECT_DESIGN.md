@@ -146,15 +146,16 @@ python evaluation/evaluate.py
 
 The current question set covers 25 representative cases across sales, delivery, customer, region, product, payment, comparison, root-cause, out-of-scope and hallucination-guardrail scenarios.
 
-Primary first metric: expected Tool selection coverage.
+Current metrics:
 
-Future metrics:
-
-- grounded-answer correctness;
-- multi-step completion rate;
-- unsupported-claim rate;
+- required Tool selection coverage;
+- multi-step completion for questions requiring more than one Tool;
+- Finding / Evidence / Interpretation / Action structure;
+- execution errors;
 - latency;
-- token/API cost.
+- input and output token usage.
+
+Grounded-answer correctness and unsupported numeric-claim review remain the next evaluation layer because they require comparing generated prose with the full set of Tool observations.
 
 ## 10. What I would say in an interview
 

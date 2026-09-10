@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from time import perf_counter
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -24,6 +25,11 @@ class AgentResult:
     answer: str
     steps: list[AgentStep] = field(default_factory=list)
     error: str | None = None
+    model: str | None = None
+    latency_ms: int = 0
+    tool_rounds: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 class OlistBusinessAgent:
@@ -51,8 +57,25 @@ class OlistBusinessAgent:
         question: str,
         history: list[dict[str, str]] | None = None,
     ) -> AgentResult:
+        started_at = perf_counter()
+        input_tokens = 0
+        output_tokens = 0
+        tool_rounds = 0
+
+        def build_result(answer: str, steps: list[AgentStep] | None = None, error: str | None = None) -> AgentResult:
+            return AgentResult(
+                answer=answer,
+                steps=steps or [],
+                error=error,
+                model=self.model,
+                latency_ms=int((perf_counter() - started_at) * 1000),
+                tool_rounds=tool_rounds,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            )
+
         if not question.strip():
-            return AgentResult(answer="Please enter a business question.")
+            return build_result(answer="Please enter a business question.")
 
         input_items: list[Any] = []
         for message in (history or [])[-6:]:
@@ -74,7 +97,7 @@ class OlistBusinessAgent:
                 )
             except Exception as exc:
                 message = f"{type(exc).__name__}: {exc}"
-                return AgentResult(
+                return build_result(
                     answer=(
                         "The AI model request failed, so no business conclusion was generated. "
                         "Check the API key, model name, network connection and account access."
@@ -83,15 +106,20 @@ class OlistBusinessAgent:
                     error=message,
                 )
 
+            usage = getattr(response, "usage", None)
+            input_tokens += int(getattr(usage, "input_tokens", 0) or 0)
+            output_tokens += int(getattr(usage, "output_tokens", 0) or 0)
+
             function_calls = [
                 item for item in response.output if item.type == "function_call"
             ]
 
             if not function_calls:
                 answer = response.output_text or "I could not generate a grounded answer."
-                return AgentResult(answer=answer, steps=steps)
+                return build_result(answer=answer, steps=steps)
 
             input_items.extend(response.output)
+            tool_rounds += 1
 
             for call in function_calls:
                 tool_name = call.name
@@ -139,7 +167,7 @@ class OlistBusinessAgent:
                     }
                 )
 
-        return AgentResult(
+        return build_result(
             answer=(
                 "The analysis reached the tool-call limit before producing a final answer. "
                 "Try a narrower business question."

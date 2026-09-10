@@ -21,6 +21,7 @@ class FakeResponses:
                     )
                 ],
                 output_text="",
+                usage=SimpleNamespace(input_tokens=100, output_tokens=20),
             ),
             SimpleNamespace(
                 output=[
@@ -32,6 +33,7 @@ class FakeResponses:
                     )
                 ],
                 output_text="",
+                usage=SimpleNamespace(input_tokens=120, output_tokens=30),
             ),
             SimpleNamespace(
                 output=[],
@@ -39,6 +41,7 @@ class FakeResponses:
                     "Finding: GMV declined in the latest complete-month comparison. "
                     "Evidence: order and AOV contributions were calculated by tools."
                 ),
+                usage=SimpleNamespace(input_tokens=80, output_tokens=40),
             ),
         ]
 
@@ -61,6 +64,10 @@ def main() -> None:
     assert called_tools == ["analyze_sales_trend", "analyze_recent_change_drivers"]
     assert len(fake_responses.requests) == 3
     assert "Finding:" in result.answer
+    assert result.tool_rounds == 2
+    assert result.input_tokens == 300
+    assert result.output_tokens == 90
+    assert result.latency_ms >= 0
 
     second_round_input = fake_responses.requests[1]["input"]
     assert any(
