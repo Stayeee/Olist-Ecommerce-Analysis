@@ -126,6 +126,11 @@ Run with an API key:
 python -m evaluation.evaluate
 ```
 
+The `Live Agent Evaluation` GitHub Actions workflow can run the same suite using
+an `OPENAI_API_KEY` repository Actions secret. It is limited to manual dispatch
+or changes to its own workflow file, so ordinary branch pushes do not repeatedly
+spend API tokens. Its detailed JSON result is retained as a workflow artifact.
+
 The evaluation records required-tool coverage, multi-step completion, Finding/Evidence/Interpretation/Action structure, execution errors, latency, and input/output token usage. Detailed results are written to `evaluation/results.json` for review.
 
 ## Project structure
