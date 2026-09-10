@@ -108,6 +108,14 @@ python -m evaluation.smoke_test
 
 The same smoke test runs automatically in GitHub Actions for the upgrade branch and pull request.
 
+CI also runs an offline fake-model test of the Agent loop:
+
+```bash
+python -m evaluation.agent_loop_test
+```
+
+It verifies that a root-cause request can execute a trend tool, feed the observation back into the loop, execute a driver tool, and then return a final answer without making a paid API request.
+
 ### 2. Agent evaluation
 
 `evaluation/questions.json` contains 25 representative business questions covering business overview, sales trends, root-cause diagnosis, regions, delivery, customers, payments, products, comparisons, out-of-scope requests and hallucination guardrails.

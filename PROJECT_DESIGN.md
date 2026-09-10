@@ -134,6 +134,8 @@ python -m evaluation.smoke_test
 
 Purpose: verify the prepared dataset loads and every analytics function executes without an LLM or API cost.
 
+CI also runs `python -m evaluation.agent_loop_test` with a fake model response sequence. This checks the multi-step orchestration path—tool call, observation, second tool call, final answer—without network access or API spend.
+
 ### Layer B — Agent evaluation
 
 Run:
