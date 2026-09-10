@@ -36,7 +36,7 @@ class OlistBusinessAgent:
         max_tool_rounds: int = 6,
     ) -> None:
         self.df = df
-        self.model = model or os.getenv("OPENAI_MODEL", "gpt-5-mini")
+        self.model = model or os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
         self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
         self.registry = build_tool_registry(df)
         self.max_tool_rounds = max_tool_rounds
@@ -45,7 +45,7 @@ class OlistBusinessAgent:
         if not question.strip():
             return AgentResult(answer="Please enter a business question.")
 
-        input_items: list[dict[str, Any]] = []
+        input_items: list[Any] = []
         for message in (history or [])[-6:]:
             role = message.get("role")
             content = message.get("content")
@@ -94,7 +94,7 @@ class OlistBusinessAgent:
                 else:
                     try:
                         result = tool(**arguments)
-                    except Exception as exc:  # keep the agent loop recoverable
+                    except Exception as exc:
                         result = {"error": f"{type(exc).__name__}: {exc}"}
 
                 steps.append(
