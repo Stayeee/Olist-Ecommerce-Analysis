@@ -1,0 +1,28 @@
+name: Analytics Smoke Test
+
+on:
+  push:
+    branches: ["agent-upgrade-v1"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run deterministic analytics smoke test
+        run: python evaluation/smoke_test.py
