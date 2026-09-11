@@ -70,7 +70,7 @@ with st.sidebar:
         api_key = st.text_input("OpenAI API key (optional)", type="password")
         st.caption("Leave blank to use the curated no-key guided demo.")
 
-    if st.button("Clear conversation", use_container_width=True):
+    if st.button("Clear conversation", width="stretch"):
         st.session_state.agent_history = []
         st.rerun()
 
@@ -102,7 +102,7 @@ with overview_tab:
     left, right = st.columns([1.5, 1])
     with left:
         fig = px.line(trend_df, x="month", y="gmv", markers=True, title="GMV trend · complete months only")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     with right:
         region = pd.DataFrame(
             analyze_region_performance(df, metric="gmv", limit=8, min_orders=100)["rows"]
@@ -114,7 +114,7 @@ with overview_tab:
             orientation="h",
             title="Top states by GMV",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
 with agent_tab:
     st.subheader("Ask the AI Business Analyst")
@@ -130,7 +130,7 @@ with agent_tab:
     default_question = "" if selected == "Write my own question" else selected
     question = st.text_area("Business question", value=default_question, height=90)
 
-    if st.button("Analyze", type="primary", use_container_width=True):
+    if st.button("Analyze", type="primary", width="stretch"):
         if not question.strip():
             st.warning("Enter a business question first.")
         elif not api_key and question not in GUIDED_DEMO_QUESTIONS:
@@ -241,7 +241,7 @@ with diagnostics_tab:
             color_continuous_scale=["#b42318", "#f2f4f7", "#027a48"],
             title="Orders vs AOV contribution to GMV change",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     with right:
         fig = px.bar(
             driver_df.sort_values("gmv_change"),
@@ -252,7 +252,7 @@ with diagnostics_tab:
             color_continuous_scale=["#b42318", "#f2f4f7", "#027a48"],
             title="State contribution to GMV change",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     st.markdown("### Interpretation")
     st.write(
