@@ -1,0 +1,49 @@
+name: Live Agent Evaluation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["agent-upgrade-v1"]
+    paths: [".github/workflows/live-agent-evaluation.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_MODEL: gpt-5-mini
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Report missing API key
+        if: env.OPENAI_API_KEY == ''
+        run: echo "OPENAI_API_KEY is not configured as a repository Actions secret."
+
+      - name: Run all live Agent evaluation cases
+        if: env.OPENAI_API_KEY != ''
+        run: python -m evaluation.evaluate
+
+      - name: Upload evaluation results
+        if: env.OPENAI_API_KEY != '' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-agent-evaluation-results
+          path: evaluation/results.json
+          if-no-files-found: error
+          retention-days: 14
+
