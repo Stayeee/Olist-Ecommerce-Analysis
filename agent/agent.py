@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import pandas as pd
-from openai import OpenAI
 
 from agent.prompts import SYSTEM_PROMPT
 from tools.registry import TOOL_SCHEMAS, build_tool_registry
@@ -41,14 +40,19 @@ class OlistBusinessAgent:
         model: str | None = None,
         api_key: str | None = None,
         max_tool_rounds: int = 6,
+        client: Any | None = None,
     ) -> None:
-        resolved_key = api_key or os.getenv("OPENAI_API_KEY")
-        if not resolved_key:
-            raise ValueError("OPENAI_API_KEY is required to run the AI agent.")
-
         self.df = df
         self.model = model or os.getenv("OPENAI_MODEL", "gpt-5-mini")
-        self.client = OpenAI(api_key=resolved_key)
+        if client is not None:
+            self.client = client
+        else:
+            resolved_key = api_key or os.getenv("OPENAI_API_KEY")
+            if not resolved_key:
+                raise ValueError("OPENAI_API_KEY is required to run the AI agent.")
+            from openai import OpenAI
+
+            self.client = OpenAI(api_key=resolved_key)
         self.registry = build_tool_registry(df)
         self.max_tool_rounds = max_tool_rounds
 
@@ -175,4 +179,3 @@ class OlistBusinessAgent:
             steps=steps,
             error="max_tool_rounds_reached",
         )
-

@@ -53,6 +53,10 @@ The important Agent capabilities are:
 - execution trace;
 - scope and hallucination guardrails.
 
+### Portfolio access without an API key
+
+The product includes a clearly labelled guided demo for four representative questions. It executes real deterministic tools and exposes the same observation trace, but it does not claim dynamic model planning. This lets a recruiter inspect the business workflow without providing credentials or creating API cost, while preserving an honest distinction between the guided path and the live Agent path.
+
 ## 5. Why Tool Calling instead of RAG
 
 The core data is structured. GMV, AOV, order count and late-delivery rate require precise calculations, so Tool Calling + Pandas is the correct first architecture.
@@ -186,4 +190,3 @@ The first version used keyword matching and fixed templates, so it was closer to
 ## 12. Current boundary
 
 This is a portfolio prototype, not a production analytics platform. It intentionally does not yet include a production database, role-based access control, enterprise observability, RAG, fine-tuning or multi-agent orchestration.
-

@@ -18,6 +18,12 @@ Example questions:
 - What does customer repeat purchase behavior look like?
 - Where is delivery risk highest?
 
+## No-key guided demo
+
+The Streamlit app remains useful without an OpenAI API key. In that case it offers four curated business questions and runs the same deterministic analytics tools used by the Agent, including a visible execution trace and decision-ready answer.
+
+This mode is deliberately labelled **Guided demo**. It does not pretend that a model planned the analysis. Supplying an API key switches the app to dynamic LLM tool selection, while the no-key path gives portfolio reviewers a reproducible way to inspect the product and its business logic.
+
 ## What makes it an Agent
 
 The original prototype used keyword routing and fixed answer templates. The upgraded version uses an LLM tool-calling loop.
@@ -115,6 +121,8 @@ python -m evaluation.agent_loop_test
 ```
 
 It verifies that a root-cause request can execute a trend tool, feed the observation back into the loop, execute a driver tool, and then return a final answer without making a paid API request.
+
+`python -m evaluation.offline_demo_test` separately verifies every curated no-key demo question and its Finding / Evidence / Interpretation / Recommended action output.
 
 ### 2. Agent evaluation
 
@@ -233,4 +241,3 @@ See `PROJECT_DESIGN.md` for the full product rationale and interview guide.
 - Product analysis is only available when a product-category field exists in the prepared table.
 - Agent evaluation currently focuses on tool-selection behavior and should be extended with answer-quality and cost metrics.
 - This is a portfolio prototype, not a production ecommerce analytics system.
-

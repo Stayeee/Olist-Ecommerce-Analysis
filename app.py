@@ -5,6 +5,7 @@ import plotly.express as px
 import streamlit as st
 
 from agent.agent import OlistBusinessAgent
+from agent.offline_demo import GUIDED_DEMO_QUESTIONS, run_guided_demo
 from data.loader import load_analysis_data
 from tools.analytics import analyze_region_performance, analyze_sales_trend, get_sales_overview
 from tools.drivers import analyze_recent_change_drivers
@@ -66,7 +67,8 @@ with st.sidebar:
 
     api_key = os.getenv("OPENAI_API_KEY", "") or secret_key
     if not api_key:
-        api_key = st.text_input("OpenAI API key", type="password")
+        api_key = st.text_input("OpenAI API key (optional)", type="password")
+        st.caption("Leave blank to use the curated no-key guided demo.")
 
     if st.button("Clear conversation", use_container_width=True):
         st.session_state.agent_history = []
@@ -118,26 +120,30 @@ with agent_tab:
     st.subheader("Ask the AI Business Analyst")
     st.caption("Try a business question instead of selecting a fixed dashboard filter.")
 
-    examples = [
-        "Why did sales decline recently?",
-        "Which regions should operations prioritize and why?",
-        "Compare SP and RJ business performance.",
-        "What does customer repeat purchase behavior look like?",
-    ]
+    examples = GUIDED_DEMO_QUESTIONS
+    if not api_key:
+        st.info(
+            "Guided demo mode is active. It runs curated questions with real deterministic "
+            "analytics tools and shows the resulting trace. It does not call an LLM."
+        )
     selected = st.selectbox("Example question", ["Write my own question"] + examples)
     default_question = "" if selected == "Write my own question" else selected
     question = st.text_area("Business question", value=default_question, height=90)
 
     if st.button("Analyze", type="primary", use_container_width=True):
-        if not api_key:
-            st.error("Add an OpenAI API key in the sidebar or Streamlit secrets before running the agent.")
-        elif not question.strip():
+        if not question.strip():
             st.warning("Enter a business question first.")
+        elif not api_key and question not in GUIDED_DEMO_QUESTIONS:
+            st.warning("Choose one of the example questions when using the no-key guided demo.")
         else:
             try:
-                with st.spinner("The agent is selecting and running analytics tools..."):
-                    agent = OlistBusinessAgent(df=df, model=model, api_key=api_key)
-                    result = agent.ask(question, history=st.session_state.agent_history)
+                if api_key:
+                    with st.spinner("The agent is selecting and running analytics tools..."):
+                        agent = OlistBusinessAgent(df=df, model=model, api_key=api_key)
+                        result = agent.ask(question, history=st.session_state.agent_history)
+                else:
+                    with st.spinner("Running the guided analysis with deterministic tools..."):
+                        result = run_guided_demo(question, df)
             except Exception as exc:
                 st.error("The agent could not start. Check the API key, model name and local environment.")
                 st.code(f"{type(exc).__name__}: {exc}")
@@ -161,6 +167,11 @@ with agent_tab:
                     f"Tokens: {result.input_tokens:,} in / {result.output_tokens:,} out · "
                     f"Latency: {result.latency_ms / 1000:.1f}s"
                 )
+                if result.model == "guided-demo-no-llm":
+                    st.caption(
+                        "Guided demo: curated deterministic workflow for portfolio viewing; "
+                        "dynamic LLM tool selection is available only when an API key is supplied."
+                    )
 
                 st.markdown("### Agent execution trace")
                 if not result.steps:
@@ -288,4 +299,3 @@ LLM decides: enough evidence?
     st.write(
         "The repository includes an offline smoke test for deterministic tools plus 25 representative Agent questions covering overview, sales, root cause, region, delivery, customer, payment, product, comparisons, out-of-scope requests and guardrails."
     )
-

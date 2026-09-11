@@ -53,9 +53,11 @@ class FakeResponses:
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
     df = load_analysis_data(root / "analysis_table.csv")
-    agent = OlistBusinessAgent(df=df, api_key="offline-test-key")
     fake_responses = FakeResponses()
-    agent.client = SimpleNamespace(responses=fake_responses)
+    agent = OlistBusinessAgent(
+        df=df,
+        client=SimpleNamespace(responses=fake_responses),
+    )
 
     result = agent.ask("Why did sales decline recently?")
     called_tools = [step.name for step in result.steps if step.step_type == "tool_call"]
@@ -82,4 +84,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
